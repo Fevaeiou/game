@@ -9,26 +9,61 @@ let gameState = {
     paused: false
 };
 
-// Player object (Sir Klent)
 const player = {
-    x: canvas.width / 2 - 30,
+    x: canvas.width / 2 - 20,
     y: canvas.height - 80,
-    width: 60,
+    width: 50,
     height: 60,
     speed: 8,
-    color: '#3498db'
+    defaultImage: new Image(),
+    imageLeft: new Image(),
+    imageRight: new Image(),
+    direction: 'right', // Default direction
+    isCatching: false, // Track if player is catching a character
+    catchTimer: 0 // Timer to control how long the catching state lasts
 };
+
+// Load player images
+player.defaultImage.src = 'a1.png'; 
+player.imageLeft.src = 'catch_l.png'; 
+player.imageRight.src = 'catch_r.png'; 
 
 // Falling characters array
 let fallingCharacters = [];
 
-// Character types
+// Character types with images
 const characterTypes = {
-    healing: { name: 'Alteyah', color: '#27ae60', effect: 'heal' },
-    poison: { name: 'Thea', color: '#e74c3c', effect: 'poison' },
-    points: { name: 'Meljah', color: '#f39c12', effect: 'points' },
-    random: { name: 'Lloyd', color: '#9b59b6', effect: 'random' }
+    healing: { name: 'Alteyah', image: new Image(), effect: 'heal' },
+    poison: { name: 'Thea', image: new Image(), effect: 'poison' },
+    points: { name: 'Meljah', image: new Image(), effect: 'points' },
+    random: { name: 'Lloyd', image: new Image(), effect: 'random' }
 };
+
+// Load character images
+characterTypes.healing.image.src = 'https://placehold.co/40x40/27ae60/ffffff/png?text=Alteyah';
+characterTypes.poison.image.src = 'https://placehold.co/40x40/e74c3c/ffffff/png?text=Thea';
+characterTypes.points.image.src = 'https://placehold.co/40x40/f39c12/ffffff/png?text=Meljah';
+characterTypes.random.image.src = 'https://placehold.co/40x40/9b59b6/ffffff/png?text=Lloyd';
+
+// Wait for all images to load before starting the game
+let imagesLoaded = 0;
+const totalImages = 7; // Player (3 images: default, left, right) + 4 character types
+
+function checkImagesLoaded() {
+    imagesLoaded++;
+    if (imagesLoaded === totalImages) {
+        updateUI();
+        gameLoop();
+    }
+}
+
+player.defaultImage.onload = checkImagesLoaded;
+player.imageLeft.onload = checkImagesLoaded;
+player.imageRight.onload = checkImagesLoaded;
+characterTypes.healing.image.onload = checkImagesLoaded;
+characterTypes.poison.image.onload = checkImagesLoaded;
+characterTypes.points.image.onload = checkImagesLoaded;
+characterTypes.random.image.onload = checkImagesLoaded;
 
 // Input handling
 const keys = {};
@@ -54,7 +89,7 @@ function spawnCharacter() {
         height: 40,
         speed: Math.random() * 3 + 2,
         type: randomType,
-        color: character.color,
+        image: character.image,
         name: character.name,
         effect: character.effect
     });
@@ -62,25 +97,14 @@ function spawnCharacter() {
 
 // Draw functions
 function drawPlayer() {
-    // Draw Sir Klent as a simple character
-    ctx.fillStyle = player.color;
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-    
-    // Add face
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(player.x + 15, player.y + 15, 8, 8); // left eye
-    ctx.fillRect(player.x + 37, player.y + 15, 8, 8); // right eye
-    
-    ctx.fillStyle = '#333';
-    ctx.fillRect(player.x + 17, player.y + 17, 4, 4); // left pupil
-    ctx.fillRect(player.x + 39, player.y + 17, 4, 4); // right pupil
-    
-    // Smile
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(player.x + 30, player.y + 35, 10, 0, Math.PI);
-    ctx.stroke();
+    // Determine which image to draw
+    let currentImage;
+    if (player.isCatching) {
+        currentImage = player.direction === 'left' ? player.imageLeft : player.imageRight;
+    } else {
+        currentImage = player.defaultImage;
+    }
+    ctx.drawImage(currentImage, player.x, player.y, player.width, player.height);
     
     // Name label
     ctx.fillStyle = '#333';
@@ -91,35 +115,8 @@ function drawPlayer() {
 
 function drawFallingCharacters() {
     fallingCharacters.forEach(char => {
-        // Draw character body
-        ctx.fillStyle = char.color;
-        ctx.fillRect(char.x, char.y, char.width, char.height);
-        
-        // Add simple face
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(char.x + 8, char.y + 8, 6, 6); // left eye
-        ctx.fillRect(char.x + 26, char.y + 8, 6, 6); // right eye
-        
-        ctx.fillStyle = '#333';
-        ctx.fillRect(char.x + 10, char.y + 10, 2, 2); // left pupil
-        ctx.fillRect(char.x + 28, char.y + 10, 2, 2); // right pupil
-        
-        // Expression based on type
-        if (char.effect === 'poison') {
-            // Frown
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(char.x + 20, char.y + 28, 6, Math.PI, 0);
-            ctx.stroke();
-        } else {
-            // Smile
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.arc(char.x + 20, char.y + 25, 6, 0, Math.PI);
-            ctx.stroke();
-        }
+        // Draw character image
+        ctx.drawImage(char.image, char.x, char.y, char.width, char.height);
         
         // Name label
         ctx.fillStyle = '#333';
@@ -150,9 +147,19 @@ function drawBackground() {
 function updatePlayer() {
     if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
         player.x = Math.max(0, player.x - player.speed);
+        player.direction = 'left'; // Update direction to left
     }
     if (keys['ArrowRight'] || keys['d'] || keys['D']) {
         player.x = Math.min(canvas.width - player.width, player.x + player.speed);
+        player.direction = 'right'; // Update direction to right
+    }
+
+    // Update catch timer
+    if (player.isCatching) {
+        player.catchTimer--;
+        if (player.catchTimer <= 0) {
+            player.isCatching = false;
+        }
     }
 }
 
@@ -181,6 +188,10 @@ function updateFallingCharacters() {
 }
 
 function handleCharacterEffect(char) {
+    // Set catching state
+    player.isCatching = true;
+    player.catchTimer = 30; // Show catching image for 0.5 seconds (30 frames at 60 FPS)
+
     switch (char.effect) {
         case 'heal':
             if (gameState.lives < 3) {
@@ -280,6 +291,9 @@ function restartGame() {
     fallingCharacters = [];
     effects = [];
     player.x = canvas.width / 2 - 30;
+    player.direction = 'right'; // Reset direction
+    player.isCatching = false; // Reset catching state
+    player.catchTimer = 0;
     document.getElementById('gameOver').style.display = 'none';
     updateUI();
 }
@@ -316,7 +330,3 @@ function gameLoop() {
     
     requestAnimationFrame(gameLoop);
 }
-
-// Initialize game
-updateUI();
-gameLoop();
